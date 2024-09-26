@@ -287,6 +287,9 @@ fn draw(ui: &mut Ui, should_exit: &mut bool, draw_context: &mut DrawContext) {
                         }
 
                         ui.table_next_column();
+                        ui.text("");
+
+                        ui.table_next_column();
                         ui.text_colored(if first_free_index as usize == index { ORANGE } else { RED }, format!("{}", index));
     
                         ui.table_next_column();
@@ -305,9 +308,6 @@ fn draw(ui: &mut Ui, should_exit: &mut bool, draw_context: &mut DrawContext) {
                         ui.table_next_column();
                         ui.text("");
                         */
-
-                        ui.table_next_column();
-                        ui.text("");
                     }
 
                     identity.pop();
