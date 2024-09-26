@@ -44,6 +44,10 @@ impl DatumHandle {
     pub fn get_handle(&self) -> u32 {
         self.0
     }
+
+    pub fn is_invald(&self) -> bool {
+        self.get_handle() == 4294967295
+    }
 }
 
 impl fmt::Debug for DatumHandle {
@@ -230,7 +234,7 @@ pub fn build_snapshot(bytes: &[u8]) -> Option<EngineSnapshot> {
 
         let base_pointer = u32::from_le_bytes([pool_entry.object_address[0], pool_entry.object_address[1], pool_entry.object_address[2], 0x0]);
 
-        if base_pointer != 0 && base_pointer >= 0x18 {
+        if pool_entry.id != 0 && base_pointer != 0 && base_pointer >= 0x18 {
             let game_object_pointer = base_pointer as usize - 0x18;
             let game_object_slice = &bytes[game_object_pointer..];
             let game_object: GameObject = unsafe { std::ptr::read(game_object_slice.as_ptr() as *const _) };

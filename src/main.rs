@@ -35,9 +35,13 @@ fn glow_context(window: &Window) -> glow::Context {
     }
 }
 
-fn print_positions(ui: &Ui, snapshot: &EngineSnapshot, player_index: u16) {
+fn print_player(ui: &Ui, snapshot: &EngineSnapshot, player_index: u16) {
     if let Some(entry) = snapshot.player_pool_entries[player_index as usize].as_ref() {
-        ui.text_colored(ORANGE, format!("Object Datum: {:#?}", entry.slave_unit_index));
+        let local_dead_player = &snapshot.player_globals.local_dead_players[player_index as usize];
+
+        ui.text_colored(ORANGE, format!("Current Object Datum: {:#?}", entry.slave_unit_index));
+        ui.text_colored(ORANGE, format!("Next Object Datum: {:#?}", local_dead_player));
+        ui.text_colored(ORANGE, format!("Last Object Datum: {:#?}", entry.last_slave_unit_index));
 
         {
             let index = entry.slave_unit_index.get_index() as usize;
@@ -49,7 +53,7 @@ fn print_positions(ui: &Ui, snapshot: &EngineSnapshot, player_index: u16) {
                snapshot.game_object_entries[index].as_ref().is_some() 
             {
                 let game_object_entry = snapshot.game_object_entries[index].as_ref().unwrap();
-    
+
                 ui.text_colored(ORANGE, format!("Position: X: {:.4} Y: {:.4} Z: {:.4}", game_object_entry.position[0], game_object_entry.position[1], game_object_entry.position[2]));
                 found = true;
             }
@@ -85,7 +89,6 @@ fn print_positions(ui: &Ui, snapshot: &EngineSnapshot, player_index: u16) {
     }
 
     if let Some(entry) = snapshot.player_pool_entries[player_index as usize].as_ref() {
-        ui.text_colored(ORANGE, format!("Last Object Datum: {:#?}", entry.last_slave_unit_index)) 
     } else { 
         ui.text_colored(ORANGE, format!("Last Unit Handle: None")) 
     }
@@ -142,15 +145,15 @@ fn draw(ui: &mut Ui, should_exit: &mut bool, draw_context: &mut DrawContext) {
     });    
 
     let main_window = ui.window("Objects")
-        .size([width - 500.0, height - 20.0], Condition::Always)
+        .size([width - 400.0, height - 20.0], Condition::Always)
         .position([0.0, 20.0], Condition::Always)
         .resizable(false)
         .collapsible(false)
         .begin();
 
     let players_window = ui.window("Players Globals")
-        .size([500.0, height - 20.0], Condition::Always)
-        .position([width - 500.0, 20.0], Condition::Always)
+        .size([400.0, height - 20.0], Condition::Always)
+        .position([width - 400.0, 20.0], Condition::Always)
         .resizable(false)
         .collapsible(false)
         .begin();
@@ -169,13 +172,14 @@ fn draw(ui: &mut Ui, should_exit: &mut bool, draw_context: &mut DrawContext) {
         ui.text_colored(ORANGE, format!("Are All Dead: {}", p.are_all_dead));
         ui.text_colored(ORANGE, format!("Input Disabled: {}", p.input_disabled));
         ui.text_colored(ORANGE, format!("Teleported: {}", p.teleported));
-        ui.text("-----------");
-        ui.text_colored(ORANGE, format!("Local Players: {:#?}", p.local_players));
-        ui.text_colored(ORANGE, format!("Next Player Object Datum: {:#?}", p.local_dead_players));
-        ui.text("Player 0 -----------");
-        print_positions(ui, &snapshot, 0);
-        ui.text("Player 1 -----------");
-        print_positions(ui, &snapshot, 1);
+
+        for player in &snapshot.player_globals.local_players {
+            if !player.is_invald() {
+                let player_index = player.get_index();
+                ui.text(format!("-------------- Player {} --------------", player_index));
+                print_player(ui, &snapshot, player_index);
+            }
+        }
 
         players_window.end();
     }
@@ -188,10 +192,13 @@ fn draw(ui: &mut Ui, should_exit: &mut bool, draw_context: &mut DrawContext) {
             ui.table_setup_column("ID");
             ui.table_setup_column("Player");
             ui.table_setup_column("Coordinates");
+            // ui.table_setup_column("Flags");
             ui.table_setup_column("Tag Name");
             ui.table_headers_row();
 
-            for index in (0..=max_object_count as usize).rev() {
+            for index in (0..=snapshot.object_pool_entries.len() as usize).rev() {
+                let identity = ui.push_id_usize(index);
+
                 if snapshot.object_pool_entries.get(index).is_some() && 
                    snapshot.game_object_entries.get(index).is_some()
                 {
@@ -209,10 +216,10 @@ fn draw(ui: &mut Ui, should_exit: &mut bool, draw_context: &mut DrawContext) {
 
                         ui.table_set_column_index(0);
 
-                        if ui.button(format!("Set#{index:<5}")) {
+                        if ui.button(&"Set") {
                             draw_context.target_index = index as u32;
                         }
-
+                        
                         if index == draw_context.target_index as usize {
                             ui.table_set_bg_color(TableBgTarget::ROW_BG0, DARK_GREY);
                         }
@@ -241,7 +248,7 @@ fn draw(ui: &mut Ui, should_exit: &mut bool, draw_context: &mut DrawContext) {
                         ui.table_next_column();
                         let mut updated_position = game_object_entry.position.clone();
 
-                        if ui.input_float3(format!("POS{}", datum_handle.get_handle()), &mut updated_position).build() {
+                        if ui.input_float3(&"POS", &mut updated_position).build() {
                             let manager = draw_context.memory.as_mut().unwrap();
                             let base_ptr = u32::from_le_bytes([object_pool_entry.object_address[0], object_pool_entry.object_address[1], object_pool_entry.object_address[2], 0x0]);
                             let game_object_pointer = base_ptr as usize - 0x18;
@@ -251,12 +258,27 @@ fn draw(ui: &mut Ui, should_exit: &mut bool, draw_context: &mut DrawContext) {
                             manager.write((game_object_pointer + 0x24 + 0x4 + 0x4) as usize, &updated_position.get(2).as_ref().expect("Could not write Z position").to_le_bytes());
                         }
 
+                        
+                        /*
+                        ui.table_next_column();
+                        
+                        let mut flags = game_object_entry.flags.clone();
+                        if ui.input_scalar(format!("Flags{}", datum_handle.get_handle()), &mut flags).build() {
+                            let manager = draw_context.memory.as_mut().unwrap();
+                            let base_ptr = u32::from_le_bytes([object_pool_entry.object_address[0], object_pool_entry.object_address[1], object_pool_entry.object_address[2], 0x0]);
+                            let game_object_pointer = base_ptr as usize - 0x18;
+
+                            manager.write((game_object_pointer + 0x1C) as usize, &flags.to_le_bytes());
+
+                        }
+                        */
+
                         ui.table_next_column();
                         ui.text(format!("{}", snapshot.tags.get(&game_object_entry.tag_index).unwrap_or(&"UNKNOWN".to_string())));
                     } else {
                         ui.table_set_column_index(0);
 
-                        if ui.button(format!("Set#{index:<5}")) {
+                        if ui.button(&"Set") {
                             draw_context.target_index = index as u32;
                         }
 
@@ -279,9 +301,16 @@ fn draw(ui: &mut Ui, should_exit: &mut bool, draw_context: &mut DrawContext) {
                         ui.table_next_column();
                         ui.text("");
 
+                        /*
+                        ui.table_next_column();
+                        ui.text("");
+                        */
+
                         ui.table_next_column();
                         ui.text("");
                     }
+
+                    identity.pop();
                 }
             }
 
