@@ -108,10 +108,10 @@ pub struct PlayerPoolEntry {
 #[derive(Debug)]
 #[repr(C)]
 pub struct TagEntry {
-    tag_class: u32,
-    tag_class_secondary: u32,
-    tag_class_tertiary: u32,
-    tag_index: u32, // tag_id
+    pub tag_class: [u8; 4],
+    pub tag_class_secondary: [u8; 4],
+    pub tag_class_tertiary: [u8; 4],
+    pub tag_index: u32, // tag_id
     tag_path_ptr: [u8; 4],
     tag_data_ptr: [u8; 4],
     unknown_1: u32,
@@ -182,7 +182,8 @@ pub struct EngineSnapshot {
     pub player_pool_header: PlayerPoolHeader,
     pub player_globals: PlayersGlobals,
     pub player_pool_entries: Vec<Option<PlayerPoolEntry>>,
-    pub tags: HashMap<u32, String>
+    pub tags: HashMap<u32, String>,
+    pub tag_entries: HashMap<u32, TagEntry>
 }
 
 impl EngineSnapshot {
@@ -247,13 +248,17 @@ pub fn build_snapshot(bytes: &[u8]) -> Option<EngineSnapshot> {
     }
 
     // Get tag index mappings to tag names
+    // Also store the tag entries
+    let mut tag_index_to_tag_entry: HashMap<u32, TagEntry> = HashMap::new();
     let mut tag_index_to_str: HashMap<u32, String> = HashMap::new();
+
     let tag_array_base_ptr = u32::from_le_bytes([tag_header.tag_array_ptr[0], tag_header.tag_array_ptr[1], tag_header.tag_array_ptr[2], 0x0]);
 
     for index in 0..tag_header.tag_count as usize {
         let tag_entry_ptr =  tag_array_base_ptr as usize + (size_of::<TagEntry>() * index);
         let tag_entry: TagEntry = unsafe { std::ptr::read(bytes[tag_entry_ptr..].as_ptr() as *const _) };
 
+        // Also used for tag_index_to_tag_entry as both will be treated seperately but same.
         if !tag_index_to_str.contains_key(&tag_entry.tag_index) {
             let tag_path_ptr = u32::from_le_bytes([tag_entry.tag_path_ptr[0], tag_entry.tag_path_ptr[1], tag_entry.tag_path_ptr[2], 0x0]) as usize;
             unsafe { 
@@ -261,6 +266,8 @@ pub fn build_snapshot(bytes: &[u8]) -> Option<EngineSnapshot> {
                     tag_index_to_str.insert(tag_entry.tag_index, value.to_string());
                 }
             }
+
+            tag_index_to_tag_entry.insert(tag_entry.tag_index, tag_entry);
         }
     }
 
@@ -282,6 +289,7 @@ pub fn build_snapshot(bytes: &[u8]) -> Option<EngineSnapshot> {
         player_pool_header: player_pool_header,
         player_pool_entries: player_pool_entries,
         player_globals: player_globals,
-        tags: tag_index_to_str 
+        tags: tag_index_to_str,
+        tag_entries: tag_index_to_tag_entry
     })
 }

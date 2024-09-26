@@ -145,15 +145,15 @@ fn draw(ui: &mut Ui, should_exit: &mut bool, draw_context: &mut DrawContext) {
     });    
 
     let main_window = ui.window("Objects")
-        .size([width - 400.0, height - 20.0], Condition::Always)
+        .size([width - 450.0, height - 20.0], Condition::Always)
         .position([0.0, 20.0], Condition::Always)
         .resizable(false)
         .collapsible(false)
         .begin();
 
     let players_window = ui.window("Players Globals")
-        .size([400.0, height - 20.0], Condition::Always)
-        .position([width - 400.0, 20.0], Condition::Always)
+        .size([450.0, height - 20.0], Condition::Always)
+        .position([width - 450.0, 20.0], Condition::Always)
         .resizable(false)
         .collapsible(false)
         .begin();
@@ -185,7 +185,7 @@ fn draw(ui: &mut Ui, should_exit: &mut bool, draw_context: &mut DrawContext) {
     }
 
     if let Some(main_window) = main_window {
-        if let Some(table) = ui.begin_table_with_flags("ObjectsTable", 7, TableFlags::SIZING_STRETCH_PROP) {
+        if let Some(table) = ui.begin_table_with_flags("ObjectsTable", 10, TableFlags::SIZING_STRETCH_PROP) {
             ui.table_setup_column("");
             ui.table_setup_column("Datum");
             ui.table_setup_column("Index");
@@ -194,6 +194,9 @@ fn draw(ui: &mut Ui, should_exit: &mut bool, draw_context: &mut DrawContext) {
             ui.table_setup_column("Coordinates");
             // ui.table_setup_column("Flags");
             ui.table_setup_column("Tag Name");
+            ui.table_setup_column("Tag Class");
+            ui.table_setup_column("Tag Class Secondary");
+            ui.table_setup_column("Tag Class Tertiary");
             ui.table_headers_row();
 
             for index in (0..=snapshot.object_pool_entries.len() as usize).rev() {
@@ -275,6 +278,31 @@ fn draw(ui: &mut Ui, should_exit: &mut bool, draw_context: &mut DrawContext) {
 
                         ui.table_next_column();
                         ui.text(format!("{}", snapshot.tags.get(&game_object_entry.tag_index).unwrap_or(&"UNKNOWN".to_string())));
+
+                        ui.table_next_column();        
+                        if let Some(entry) = snapshot.tag_entries.get(&game_object_entry.tag_index) {
+                            let tag_class = String::from_utf8_lossy(&entry.tag_class).chars().rev().collect::<String>();
+                            ui.text(format!("{}", tag_class));
+                        } else {
+                            ui.text("");
+                        }
+                        
+                        ui.table_next_column();        
+                        if let Some(entry) = snapshot.tag_entries.get(&game_object_entry.tag_index) {
+                            let tag_class = String::from_utf8_lossy(&entry.tag_class_secondary).chars().rev().collect::<String>();
+                            ui.text(format!("{}", tag_class));
+                        } else {
+                            ui.text("");
+                        }
+
+                        ui.table_next_column();        
+                        if let Some(entry) = snapshot.tag_entries.get(&game_object_entry.tag_index) {
+                            let tag_class = String::from_utf8_lossy(&entry.tag_class_tertiary).chars().rev().collect::<String>();
+                            ui.text(format!("{}", tag_class));
+                        } else {
+                            ui.text("");
+                        }
+    
                     } else {
                         ui.table_set_column_index(0);
 
@@ -304,10 +332,14 @@ fn draw(ui: &mut Ui, should_exit: &mut bool, draw_context: &mut DrawContext) {
                         ui.table_next_column();
                         ui.text("");
 
-                        /*
                         ui.table_next_column();
                         ui.text("");
-                        */
+
+                        ui.table_next_column();
+                        ui.text("");
+
+                        ui.table_next_column();
+                        ui.text("");
                     }
 
                     identity.pop();
